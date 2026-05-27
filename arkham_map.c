@@ -49,10 +49,21 @@ LkNode* lkInsertEnd(Lk* lk, void* value) {
         cur = cur->next;
     }
     cur->next = newLkn;
+    lk->count++;
     return newLkn;
 }
 
+LkNode* lkRemoveFirst(Lk* lk) {
+    if(lk->first == NULL) {
+        return NULL;
+    }
+    LkNode* start = lk->first;
+    lk->first = lk->first->next;
+    return start;
+}
+
 typedef struct Location {
+    int id;
     char name[MAXNAME];
     Lk* connections;
 } Location;
@@ -77,6 +88,16 @@ Connection* initConnection(Location* dest, uint cost) {
     connection->dest = dest;
     connection->cost = cost;
     return connection;
+}
+
+Lk* cloneConnections(Lk* connections) {
+    Lk* clone = (Lk*) malloc(sizeof(Lk));
+    for(LkNode* lkn = (LkNode *) connections->first; lkn != NULL; lkn = lkn->next) {
+        Connection* baseCon = (Connection*) lkn->value;
+        Connection* newCon = initConnection(baseCon->dest, baseCon->cost);
+        lkInsertStart(clone, newCon);
+    }
+    return clone;
 }
 
 Connection* addConnection(Location* start, Location* dest, uint cost) {
@@ -124,14 +145,73 @@ void removeBiConnection(Location* a, Location* b) {
     removeConnection(b, a);
 }
 
-Location* addLocation(Graph* map, char name[MAXNAME]) {
+Location* addLocation(Graph* map, int id, char name[MAXNAME]) {
     Location* location = (Location*) malloc(sizeof(Location));
+    location->id = id;
     location->connections = lkinit();
     strncpy(location->name, name, MAXNAME);
     lkInsertStart(map->locations, location);
     return location;
 }
 
+Location* getByName(Lk* locations, char* name) {
+    LkNode* curN = locations->first;
+    while(curN != NULL) {
+        Location* location = (Location*) curN->value;
+        int diff = strcmp(location->name, name);
+        if(diff == 0) {
+            return location;
+        }
+        curN = curN->next;
+    }
+    return NULL;
+}
+
+typedef struct {
+    bool success;
+    int totalCost;
+    Lk* path;
+} Result;
+
+Result* initResult() {
+    Result* result = (Result*) malloc(sizeof(Result));
+    result->success=false;
+    result->totalCost=0;
+    result->path = lkinit();
+    return result;
+}
+
+Result* findPathBad(Location* start, Location* dest, Lk* visited) {
+    Result* result = initResult();
+
+    LkNode* curN = start->connections->first;
+    while(curN != NULL) {
+        Connection* curConnection = (Connection *) curN->value;
+        int diff = strcmp(curConnection->dest->name, dest->name);
+        printf("\n %s", curConnection->dest->name);
+
+        if(diff == 0) {
+            result->success = true;
+            return result;
+        }
+
+        Location* foud = getByName(visited, curConnection->dest->name);
+        if(foud != NULL) {
+            curN = curN->next;
+            continue;
+        }
+        lkInsertStart(visited, curConnection->dest);
+        Result* partialResult = findPathBad(curConnection->dest, dest, visited);
+
+        if(partialResult->success) {
+            return partialResult;
+        }
+
+        curN = curN->next;
+    }
+
+    return result;
+}
 
 void printConnections(Lk* connections) {
     LkNode* curN = connections->first;
@@ -140,7 +220,7 @@ void printConnections(Lk* connections) {
             break;
         }
         Connection* connection = (Connection*) curN->value;
-        printf("-(%d)-> %s | ", connection->cost, connection->dest->name);
+        printf("-(%02d)-> %-20s | ", connection->cost, connection->dest->name);
         curN = curN->next;
     }
 }
@@ -259,7 +339,7 @@ Graph* initArkhamMap() {
     };
 
     for(int i = 0; i < LOCCOUNT; i++) {
-        Location* loc = addLocation(map, names[i]);
+        Location* loc = addLocation(map, i, names[i]);
         glocs[i] = loc;
     }
 
@@ -280,10 +360,79 @@ Graph* initArkhamMap() {
     return map;
 }
 
+/*
+private static void example(Map<String, List<String>> graph) {
+    var filaDeBusca = new ArrayList<>(graph.get("Voce"));
+    var verificados = new HashSet<String>();
+    while (!filaDeBusca.isEmpty()) {
+        String first = filaDeBusca.remove(0);
+        // Se o nó já foi verificado, pulamos para o próximo
+        if (verificados.contains(first)) {
+            continue;
+        }
+        // Lógica de verificação do elemento desejado
+        if (first.startsWith("Jon")) {
+            System.out.println("Encontrado: " + first);
+            break;
+        }
+        verificados.add(first);
+        filaDeBusca.addAll(
+            Optional.ofNullable(graph.get(first)).orElseGet(List::of)
+        );
+    }
+}*/
+
+bool lkContainsLoc(Lk* lk, Location* target) {
+    bool found = false;
+    for(LkNode* lkn = lk->first; lkn != NULL; lkn = lkn->next) {
+        Location* loc = (Location*) lkn->value;
+        if(loc->id == target->id) {
+            return true;
+        }
+    } 
+    return found;
+}
+
+void bfs(Graph* map, Location* start, Location* end) {
+    Lk* search = cloneConnections(start->connections);
+    Lk* verified = lkinit();
+    while(search->first!=NULL) {
+        LkNode* lkn = lkRemoveFirst(search);
+        Location* loc = (Location*) lkn->value;
+
+        printf("\n %s", loc->name);
+
+        if(!lkContainsLoc(verified, loc)) {
+            continue;
+        }
+        if(loc->id == end->id) {
+            printf("bfs Found!");
+            break;
+        }
+        lkInsertStart(verified, loc);
+        search = cloneConnections(getByName(start->connections, loc->name)->connections);
+    }
+}
+
 int main() {
     Graph* map = initArkhamMap();
     printGraph(map);
-    //bool remove = removeConnection(loc1, loc2);
-    //printGraph(map);
+
+    while(1) {
+        char* name = malloc(sizeof(char) * MAXNAME);
+
+        printf("\nStart: ");
+        scanf("%s", name);
+        Location* start = getByName(map->locations, name);
+
+        printf("\nDest: ");
+        scanf("%s", name);
+        Location* dest = getByName(map->locations, name);
+
+        printf("\nStart: %s -> Dest: %s", start->name, dest->name);
+
+        bfs(map, start, dest);
+    }
+
     return 0;
 }
