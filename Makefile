@@ -6,5 +6,8 @@ build: arkham_map.c | bin
 run:
 	"./bin/arkham_map.exe"
 
+run-win:
+	".\bin\arkham_map.exe"
+
 bin:
 	mkdir bin

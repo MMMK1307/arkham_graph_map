@@ -17,15 +17,15 @@ typedef struct Lk {
     size_t count;
 } Lk;
 
-Lk* lkinit(void* value) {
-    Lk* lk = malloc(sizeof(lkinit));
+Lk* lkinit() {
+    Lk* lk = (Lk*) malloc(sizeof(Lk));
     lk->count = 0;
     lk->first = NULL;
     return lk;
 }
 
 LkNode* lknodeinit(void* value) {
-    LkNode* lkn = malloc(sizeof(LkNode));
+    LkNode* lkn = (LkNode*) malloc(sizeof(LkNode));
     lkn->value = value;
     return lkn;
 }
@@ -34,6 +34,7 @@ LkNode* lkInsertStart(Lk* lk, void* value) {
     LkNode* newLkn = lknodeinit(value);
     newLkn->next = lk->first;
     lk->first = newLkn;
+    lk->count++;
     return newLkn;
 }
 
@@ -67,7 +68,7 @@ typedef struct {
 
 Graph* initg() {
     Graph* graph = (Graph*) malloc(sizeof(Graph));
-    graph->locations = NULL; 
+    graph->locations = lkinit();
     return graph;
 }
 
@@ -90,25 +91,30 @@ void addBiConnection(Location* a, Location* b, uint abcost, uint bacost) {
 }
 
 bool removeConnection(Location* start, Location* dest) {
-    if(start->connections->first == NULL) {
+    LkNode *curC = start->connections->first;
+    if(curC == NULL) {
+        printf("\n**The first is missing**\n");
         return false;
     }
-    LkNode *curC = start->connections->first;
     LkNode *prev = NULL;
     while(curC != NULL) {
-        Connection* connect = (Connection*) curC;
+        Connection* connect = (Connection*) curC->value;
         int d = strcmp(connect->dest->name, dest->name);
         if(d == 0) {
             LkNode* next = curC->next;
             free(curC);
             if(prev == NULL) {
+                start->connections->first = NULL;
+                start->connections->count--;
                 return true;
             }
             prev->next = next;
+            start->connections->count--;
             return true;
         }
         prev = curC;
         curC = curC->next;
+        break;
     }
     return false;
 }
@@ -118,8 +124,9 @@ void removeBiConnection(Location* a, Location* b) {
     removeConnection(b, a);
 }
 
-Location* addLocation(Graph* map, char* name) {
+Location* addLocation(Graph* map, char name[MAXNAME]) {
     Location* location = (Location*) malloc(sizeof(Location));
+    location->connections = lkinit();
     strncpy(location->name, name, MAXNAME);
     lkInsertStart(map->locations, location);
     return location;
@@ -128,28 +135,24 @@ Location* addLocation(Graph* map, char* name) {
 
 void printConnections(Lk* connections) {
     LkNode* curN = connections->first;
-
     while(curN != NULL) {
-
         if(curN->value == NULL) {
             break;
         }
-
         Connection* connection = (Connection*) curN->value;
-        printf("-(%d)-> %s ", connection->cost, connection->dest->name);
+        printf("-(%d)-> %s | ", connection->cost, connection->dest->name);
         curN = curN->next;
     }
 }
 
 void printGraph(Graph* map) {
     LkNode* curN = map->locations->first;
-    printf("printing...\n");
     while(curN != NULL) {
         if(curN->value == NULL) {
             break;
         }
         Location* location = (Location*) curN->value;
-        printf("%-20s ", location->name);
+        printf("\n%-20s ", location->name);
         printConnections(location->connections);
         curN = curN->next;
         printf("\n");
@@ -157,21 +160,130 @@ void printGraph(Graph* map) {
     printf("\n");
 }
 
+#define LOCCOUNT 28
+#define CONCOUNT 117
+
+Location* glocs[LOCCOUNT];
+
+Graph* initArkhamMap() {
+    Graph* map = initg();
+
+    char names[LOCCOUNT][MAXNAME] = {
+        // 0 // 1
+        "ProcessingCenter", "ArkhamMainGate",
+
+        // 2 // 3 // 4
+        "Bowery", "SubwayEntry1", "Museum",
+
+        // 5
+        "ParkRow", "TigerVault", "AceChemicals", "MadHatterHideout",
+        // 9
+        "HushHideout", "Courthouse", "Church",
+
+        // 12
+        "AmusementMile", "EveHideout", "GCPD", "BaneHideout", "AmIdBridge",
+
+        // 17
+        "IndustrialDistrict", "ZazzHideout", "SteelMill", "SubwayEntry2",
+
+        // 21
+        "Subway",
+
+        // 22
+        "UndergroundStreets1", "UndergroundStreets2", "WonderTowerBase", "WonderTowerTop",
+
+        // 26
+        "WonderCityEntry", "WonderCity",
+    };
+
+    char connects[CONCOUNT] = {
+        0,
+          1, 10,
+          23, 3, 'b',
+        1,
+          2, 5, 'b',
+        2,
+          3, 9,
+          4, 6,
+          5, 10, 'b',
+        3,
+          21, 50, 'b',
+        5,
+          6, 50,
+          7, 4,
+          8, 7,
+          9, 10,
+          10, 5,
+          11, 10, 'b',
+        6,
+          11, 8, 'b',
+        10,
+          9, 5,
+          11, 8, 'b',
+        11,
+          12, 8, 'b',
+        12,
+          13, 8,
+          14, 6,
+          15, 7,
+          16, 7, 'b',
+        13,
+          14, 7, 'b',
+        14,
+          15, 5, 'b',
+        15,
+          16, 8, 'b',
+        16,
+          17, 6,
+          18, 6, 'b',
+        17,
+          18, 5,
+          19, 6,
+          20, 8, 'b',
+        19,
+          20, 5, 'b',
+        20,
+          21, 50, 'b',
+        21,
+          22, 5, 'b',
+        22,
+          24, 30, 'b',
+        23,
+          24, 15, 'b',
+        24,
+          25, 60,
+          26, 5, 'b',
+        26,
+          27, 40, 'b',
+        'e',
+    };
+
+    for(int i = 0; i < LOCCOUNT; i++) {
+        Location* loc = addLocation(map, names[i]);
+        glocs[i] = loc;
+    }
+
+    for(int i = 0; i< CONCOUNT; i++) {
+        char locIndex = connects[i];
+        i++;
+        if(locIndex == 'e') {
+            break;
+        }
+        while(connects[i] != 'b') {
+            char destIndex = connects[i++];
+            char cost = connects[i++];
+            //printf("\norigin: %d destindex: %d, cost: %d", locIndex, destIndex, cost);
+            addBiConnection(glocs[locIndex], glocs[destIndex], cost, cost);
+        }
+    }
+
+    return map;
+}
 
 int main() {
-    Graph* map = initg();
-    Location* loc1 = addLocation(map, "Bowery");
-    Location* loc2 = addLocation(map, "Industrial Disc");
-    Location* loc3 = addLocation(map, "KK");
-
-    addConnection(loc1, loc2, 5);
-    addConnection(loc2, loc3, 10);
-    addConnection(loc3, loc1, 500);
-
+    Graph* map = initArkhamMap();
     printGraph(map);
-    printf("asdflkjasdf");
-    removeConnection(loc1, loc2);
-    printGraph(map);
-
+    //bool remove = removeConnection(loc1, loc2);
+    //printGraph(map);
     return 0;
 }
