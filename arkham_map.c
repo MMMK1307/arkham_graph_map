@@ -39,13 +39,9 @@ LkNode* lkInsertStart(Lk* lk, void* value) {
 }
 
 LkNode* lkInsertEnd(Lk* lk, void* value) {
-    printf("Before Everything");
     if (lk->first == NULL) {
-      printf("InsertingFirst");
-        return lkInsertStart(NULL, value);
+        return lkInsertStart(lk, value);
     }
-
-    printf("Creating it");
     LkNode* newLkn = lknodeinit(value);
     LkNode* cur = lk->first;
     while(cur->next != NULL) {
@@ -387,7 +383,7 @@ void bfs(Graph* map, Location* start, Location* end, Lk* solution) {
   Lk* q = lkinit();
   Lk* verified = lkinit();
   lkInsertStart(q, start);
-  printf("\nstarting bfs2. Start: %s\n", start->name);
+  //printf("\nstarting bfs2. Start: %s\n", start->name);
 
   while(q->first != NULL) {
     printq(q);
@@ -405,10 +401,8 @@ void bfs(Graph* map, Location* start, Location* end, Lk* solution) {
       Connection* con = (Connection*) lkn->value;
       Location* loc = con->dest;
       if(!lkContainsLoc(verified, loc)) {
-        printf("\ninserting\n");
         lkInsertStart(verified, loc);
-        printf("\ninserting q\n");
-        lkInsertEnd(q, loc);
+        lkInsertStart(q, loc);
       }
       lkn = lkn->next;
     }
