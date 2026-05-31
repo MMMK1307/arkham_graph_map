@@ -1,3 +1,4 @@
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -27,6 +28,7 @@ Lk* lkinit() {
 LkNode* lknodeinit(void* value) {
     LkNode* lkn = (LkNode*) malloc(sizeof(LkNode));
     lkn->value = value;
+    lkn->next = NULL;
     return lkn;
 }
 
@@ -111,6 +113,32 @@ void addBiConnection(Location* a, Location* b, uint abcost, uint bacost) {
     addConnection(b, a, bacost);
 }
 
+void addBalanceConnection(Location* start, Location* dest, uint cost) {
+    Lk* lk = start->connections;
+    Connection* connection = initConnection(dest, cost);
+    if (lk->first == NULL ||
+        ((Connection *)(lk->first->value))->cost >= cost){
+        lkInsertStart(lk, connection);
+        return;
+    }
+    LkNode* newLkn = lknodeinit(connection);
+    LkNode* cur;
+    for(cur = lk->first;
+        cur->next != NULL && ((Connection*)cur->next->value)->cost <= cost;
+        cur=cur->next) {
+    }
+
+    LkNode* next = cur->next;
+    cur->next = newLkn;
+    newLkn->next = next;
+    lk->count++;
+}
+
+void addBalanceBiConnection(Location* a, Location* b, uint abcost, uint bacost) {
+    addBalanceConnection(a, b, abcost);
+    addBalanceConnection(b, a, bacost);
+}
+
 bool removeConnection(Location* start, Location* dest) {
     LkNode *curC = start->connections->first;
     if(curC == NULL) {
@@ -165,52 +193,6 @@ Location* getByName(Lk* locations, char* name) {
         curN = curN->next;
     }
     return NULL;
-}
-
-typedef struct {
-    bool success;
-    int totalCost;
-    Lk* path;
-} Result;
-
-Result* initResult() {
-    Result* result = (Result*) malloc(sizeof(Result));
-    result->success=false;
-    result->totalCost=0;
-    result->path = lkinit();
-    return result;
-}
-
-Result* findPathBad(Location* start, Location* dest, Lk* visited) {
-    Result* result = initResult();
-
-    LkNode* curN = start->connections->first;
-    while(curN != NULL) {
-        Connection* curConnection = (Connection *) curN->value;
-        int diff = strcmp(curConnection->dest->name, dest->name);
-        printf("\n %s", curConnection->dest->name);
-
-        if(diff == 0) {
-            result->success = true;
-            return result;
-        }
-
-        Location* foud = getByName(visited, curConnection->dest->name);
-        if(foud != NULL) {
-            curN = curN->next;
-            continue;
-        }
-        lkInsertStart(visited, curConnection->dest);
-        Result* partialResult = findPathBad(curConnection->dest, dest, visited);
-
-        if(partialResult->success) {
-            return partialResult;
-        }
-
-        curN = curN->next;
-    }
-
-    return result;
 }
 
 void printConnections(Lk* connections) {
@@ -352,8 +334,9 @@ Graph* initArkhamMap() {
         while(connects[i] != 'b') {
             char destIndex = connects[i++];
             char cost = connects[i++];
-            //printf("\norigin: %d destindex: %d, cost: %d", locIndex, destIndex, cost);
-            addBiConnection(glocs[locIndex], glocs[destIndex], cost, cost);
+            // printf("\norigin: %d destindex: %d, cost: %d", locIndex, destIndex, cost);
+            // addBiConnection(glocs[locIndex], glocs[destIndex], cost, cost);
+            addBalanceBiConnection(glocs[locIndex], glocs[destIndex], cost, cost);
         }
     }
 
@@ -371,6 +354,17 @@ bool lkContainsLoc(Lk* lk, Location* target) {
     return found;
 }
 
+bool lkConnectionContainsLoc(Lk* lk, Location* target) {
+    bool found = false;
+    for(LkNode* lkn = lk->first; lkn != NULL; lkn = lkn->next) {
+        Connection* con = (Connection*) lkn->value;
+        if(con->dest->id == target->id) {
+            return true;
+        }
+    } 
+    return found;
+}
+
 void printq(Lk* q) {
   printf("\n");
   for(LkNode* lkn = q->first; lkn != NULL; lkn = lkn->next) {
@@ -379,56 +373,173 @@ void printq(Lk* q) {
   }
 }
 
-void bfs(Graph* map, Location* start, Location* end, Lk* solution) {
-  Lk* q = lkinit();
-  Lk* verified = lkinit();
-  lkInsertStart(q, start);
-  //printf("\nstarting bfs2. Start: %s\n", start->name);
+void bfs(Graph* map, Location* start) {
+    Lk* q = lkinit();
+    Lk* verified = lkinit();
+    lkInsertStart(q, start);
+    //printf("\nstarting bfs2. Start: %s\n", start->name);
 
-  while(q->first != NULL) {
+    while(q->first != NULL) {
     printq(q);
     Location* loc = (Location*) lkRemoveFirst(q)->value;
 
-    printf("\nVisited: %s\n", loc->name);
-
-    if(loc->id == end->id) {
-      printf("Found!");
-      return;
-    }
+    printf(" %s\n", start->name);
 
     LkNode* lkn = loc->connections->first;
-    while(lkn) {
-      Connection* con = (Connection*) lkn->value;
-      Location* loc = con->dest;
-      if(!lkContainsLoc(verified, loc)) {
-        lkInsertStart(verified, loc);
-        lkInsertStart(q, loc);
-      }
-      lkn = lkn->next;
+        while(lkn) {
+            Connection* con = (Connection*) lkn->value;
+            Location* loc = con->dest;
+            if(!lkContainsLoc(verified, loc)) {
+                if(loc->id == start->id){
+                  lkn = lkn->next;
+                  continue;
+                }
+                lkInsertStart(verified, loc);
+                lkInsertStart(q, loc);
+            }
+          lkn = lkn->next;
+        }
     }
-  }
 }
 
+Connection* getConn(Location* start, Location* dest) {
+    for(LkNode* lkn = start->connections->first; lkn != NULL; lkn = lkn->next) {
+        Connection* con = lkn->value;
+        if(con->dest->id == dest->id) {
+            return con;
+        }
+    }
+    return NULL;
+}
+
+int getDistance(Location* start, Location* dest) {
+    Connection* con = getConn(start, dest);
+    if(con == NULL) {
+        return 0;
+    }
+    return con->cost;
+}
+
+void printDijk(int dist[], int n) {
+    printf("\nDistances!\n");
+    for(int i = 0; i< LOCCOUNT; i++) {
+        printf("i: %d dist: %d \n", i, dist[i]);
+    }
+}
+
+int minDistance(int dist[], bool sptSet[]) {
+    int min = INT_MAX, min_index;
+    for(int v = 0; v < LOCCOUNT; v++) {
+        if(sptSet[v] == false && dist[v] <= min) {
+            min = dist[v];
+            min_index = v;
+        }
+    }
+    return min_index;
+}
+
+void printSols(Lk* sols[], int originId, int DestId) {
+    printf("\n%s ", glocs[originId]->name);
+    int sum = 0;
+    for(LkNode* lkn = sols[DestId]->first; lkn != NULL; lkn = lkn->next) {
+        Connection* scons = (Connection *) lkn->value;
+        printf(" -(%02d)-> %s ", scons->cost, scons->dest->name);
+        sum += scons->cost;
+    }
+    printf("\nTotal Seconds: %d", sum);
+    printf("\n");
+}
+
+void dijktra(Graph* map, Location* start, Location* dest, Lk** sCons) {
+    int dist[LOCCOUNT];
+
+    bool sptSet[LOCCOUNT];
+
+    for(int i = 0; i < LOCCOUNT; i++) {
+        dist[i] = INT_MAX;
+        sptSet[i] = false;
+    }
+
+    dist[start->id] = 0;
+
+    for(int c = 0; c < LOCCOUNT- 1; c++) {
+        int u = minDistance(dist, sptSet);
+        sptSet[u] = true;
+        for(int v = 0; v < LOCCOUNT; v++) {
+            if(!sptSet[v] && getDistance(glocs[u], glocs[v])
+                && dist[u] != INT_MAX
+                && dist[u] + getDistance(glocs[u], glocs[v]) < dist[v]
+            ) {
+                dist[v] = dist[u] + getDistance(glocs[u], glocs[v]);
+                Lk* uCons = sCons[u];
+                for(LkNode* lkn = uCons->first; lkn != NULL; lkn = lkn->next) {
+                    Connection* con = (Connection*)lkn->value;
+                    lkInsertEnd(sCons[v], con);
+                }
+                lkInsertEnd(sCons[v], getConn(glocs[u], glocs[v]));
+            }
+        }
+    }
+}
+
+Location* askForLocation(Graph* map, const char* msg) {
+    char* name = malloc(sizeof(char) * MAXNAME);
+    printf("\n%s", msg);
+    scanf("%s", name);
+    Location* loc = getByName(map->locations, name);
+    if(loc == NULL) {
+        printf("\n**Location Not Found **\n");
+    }
+    return loc;
+}
+
+void pathing(Graph* map) {
+    Location* start = askForLocation(map, "Start: ");
+    if(start == NULL)
+        return;
+    Location* dest = askForLocation(map, "Dest: ");
+    if(dest == NULL)
+        return;
+
+    Lk* sols[LOCCOUNT] = {};
+
+    for(int i = 0; i < LOCCOUNT; i++)
+        sols[i] = lkinit();
+
+    dijktra(map, start, dest, sols);
+
+    printSols(sols, start->id, dest->id);
+
+    for(int i = 0; i < LOCCOUNT; i++)
+        free(sols[i]);
+}
+
+void pbfs(Graph* map) {
+    Location* start = askForLocation(map, "Start: ");
+    if(start == NULL)
+        return;
+    bfs(map, start);
+}
 
 int main() {
     Graph* map = initArkhamMap();
-    printGraph(map);
 
-    while(1) {
-        char* name = malloc(sizeof(char) * MAXNAME);
+    int op = -1;
 
-        printf("\nStart: ");
-        scanf("%s", name);
-        Location* start = getByName(map->locations, name);
-
-        printf("\nDest: ");
-        scanf("%s", name);
-        Location* dest = getByName(map->locations, name);
-
-        printf("\nStart: %s -> Dest: %s", start->name, dest->name);
-
-        Lk* solution = lkinit();
-        bfs(map, start, dest, solution);
+    while(op != 0) {
+        printf("\nOptions: [1] Print Map Connections [2] Pathing (dijktra) [3] Pathing? (BFS) [0] Exit \n:");
+        scanf("%d", &op);
+        switch(op) {
+            case 1:
+                printGraph(map);
+                break;
+            case 2:
+                pathing(map);
+                break;
+            case 3:
+                pbfs(map);
+                break;
+        }
     }
 
     return 0;
