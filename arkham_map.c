@@ -140,37 +140,38 @@ void addBalanceBiConnection(Location* a, Location* b, uint abcost, uint bacost) 
 }
 
 bool removeConnection(Location* start, Location* dest) {
-    LkNode *curC = start->connections->first;
-    if(curC == NULL) {
+    printf("\n(c: %zu) %s removig %s", start->connections->count, start->name, dest->name);
+    if(start->connections->first == NULL) {
         printf("\n**The first is missing**\n");
         return false;
     }
     LkNode *prev = NULL;
-    while(curC != NULL) {
-        Connection* connect = (Connection*) curC->value;
-        int d = strcmp(connect->dest->name, dest->name);
-        if(d == 0) {
-            LkNode* next = curC->next;
-            free(curC);
-            if(prev == NULL) {
-                start->connections->first = NULL;
-                start->connections->count--;
-                return true;
-            }
-            prev->next = next;
-            start->connections->count--;
+
+    for(LkNode* curN = start->connections->first; curN != NULL; curN = curN->next) {
+        Connection* connect = (Connection*) curN->value;
+
+        if(connect->dest->id != dest->id) {
+            prev = curN;
+            continue;
+        }
+
+        start->connections->count--;
+
+        if(prev==NULL) {
+            start->connections->first=curN->next;
             return true;
         }
-        prev = curC;
-        curC = curC->next;
-        break;
+
+        prev->next = curN->next;
+        return true;
     }
     return false;
 }
 
 void removeBiConnection(Location* a, Location* b) {
-    removeConnection(a, b);
-    removeConnection(b, a);
+    bool aa = removeConnection(a, b);
+    bool ab = removeConnection(b, a);
+    printf("(aa)%s (ab)%s", aa ? "True" : "False", ab ? "True" : "False");
 }
 
 Location* addLocation(Graph* map, int id, char name[MAXNAME]) {
@@ -208,15 +209,10 @@ void printConnections(Lk* connections) {
 }
 
 void printGraph(Graph* map) {
-    LkNode* curN = map->locations->first;
-    while(curN != NULL) {
-        if(curN->value == NULL) {
-            break;
-        }
-        Location* location = (Location*) curN->value;
+    for(LkNode* lkn = map->locations->first; lkn != NULL; lkn = lkn->next) {
+        Location* location = (Location*) lkn->value;
         printf("\n%-20s ", location->name);
         printConnections(location->connections);
-        curN = curN->next;
         printf("\n");
     }
     printf("\n");
@@ -521,13 +517,70 @@ void pbfs(Graph* map) {
     bfs(map, start);
 }
 
+
+void removeAllConnections(Location* loc) {
+    for(LkNode* lkn = loc->connections->first; lkn != NULL; lkn = lkn->next) {
+        Connection* con = (Connection *) lkn->value;
+        removeBiConnection(loc, con->dest);
+    }
+    loc->connections->first = NULL;
+}
+
+
+void removeLocation(Graph* map) {
+    Location* loc = askForLocation(map, "\nLocation: ");
+    if(loc == NULL) {
+        return;
+    }
+    LkNode *prev = NULL;
+    for(LkNode* lkn = map->locations->first; lkn != NULL; lkn = lkn->next) {
+        Location* curLoc = ((Location*)lkn->value);
+        if(curLoc->id == loc->id) {
+            prev->next = lkn->next;
+            removeAllConnections(curLoc);
+            free(lkn);
+            map->locations->count--;
+            break;
+        }
+        prev = lkn;
+    }
+}
+
+void askRemoveLocation(Graph* map) {
+    Location* a = askForLocation(map, "Location A: ");
+    if(a == NULL) {
+        return;
+    }
+    Location* b = askForLocation(map, "Location B: ");
+    if(b == NULL) {
+        return;
+    }
+    removeBiConnection(a, b);
+}
+
+void editMap(Graph* map) {
+    int editOp = -1;
+    while(editOp != 0) {
+        printf("\nOptions: [1] Remove Location [2] Remove Connection [0] ExitEdit \n:");
+        scanf("%d", &editOp);
+        switch(editOp) {
+            case 1:
+                removeLocation(map);
+                break;
+            case 2:
+                askRemoveLocation(map);
+                break;
+        }
+    }
+}
+
 int main() {
     Graph* map = initArkhamMap();
 
     int op = -1;
 
     while(op != 0) {
-        printf("\nOptions: [1] Print Map Connections [2] Pathing (dijktra) [3] Pathing? (BFS) [0] Exit \n:");
+        printf("\nOptions: [1] Print Map Connections [2] Pathing (dijktra) [3] Pathing? (BFS) [4] Edit [0] Exit \n:");
         scanf("%d", &op);
         switch(op) {
             case 1:
@@ -538,6 +591,9 @@ int main() {
                 break;
             case 3:
                 pbfs(map);
+                break;
+            case 4:
+                editMap(map);
                 break;
         }
     }
