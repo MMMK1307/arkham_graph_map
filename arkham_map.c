@@ -140,7 +140,6 @@ void addBalanceBiConnection(Location* a, Location* b, uint abcost, uint bacost) 
 }
 
 bool removeConnection(Location* start, Location* dest) {
-    printf("\n(c: %zu) %s removig %s", start->connections->count, start->name, dest->name);
     if(start->connections->first == NULL) {
         printf("\n**The first is missing**\n");
         return false;
@@ -171,7 +170,6 @@ bool removeConnection(Location* start, Location* dest) {
 void removeBiConnection(Location* a, Location* b) {
     bool aa = removeConnection(a, b);
     bool ab = removeConnection(b, a);
-    printf("(aa)%s (ab)%s", aa ? "True" : "False", ab ? "True" : "False");
 }
 
 Location* addLocation(Graph* map, int id, char name[MAXNAME]) {
@@ -376,20 +374,15 @@ void bfs(Graph* map, Location* start) {
     //printf("\nstarting bfs2. Start: %s\n", start->name);
 
     while(q->first != NULL) {
-    printq(q);
-    Location* loc = (Location*) lkRemoveFirst(q)->value;
+        //printq(q);
+        Location* loc = (Location*) lkRemoveFirst(q)->value;
+        printf(" -> %s ", loc->name);
 
-    printf(" %s\n", start->name);
-
-    LkNode* lkn = loc->connections->first;
+        LkNode* lkn = loc->connections->first;
         while(lkn) {
             Connection* con = (Connection*) lkn->value;
             Location* loc = con->dest;
             if(!lkContainsLoc(verified, loc)) {
-                if(loc->id == start->id){
-                  lkn = lkn->next;
-                  continue;
-                }
                 lkInsertStart(verified, loc);
                 lkInsertStart(q, loc);
             }
@@ -514,7 +507,9 @@ void pbfs(Graph* map) {
     Location* start = askForLocation(map, "Start: ");
     if(start == NULL)
         return;
+    printf("\n");
     bfs(map, start);
+    printf("\n");
 }
 
 
@@ -574,13 +569,70 @@ void editMap(Graph* map) {
     }
 }
 
+Location* dfs(Lk* connections, Location* dest, Lk* visited, Lk* solution) {
+  for(LkNode* lkn = connections->first; lkn != NULL; lkn = lkn->next) {
+    Connection* con = (Connection*) lkn->value;
+
+    if(lkContainsLoc(visited, con->dest)) {
+      continue;
+    }
+
+    if(con->dest->id == dest->id) {
+      lkInsertStart(solution, con);
+      return con->dest;
+    }
+
+    lkInsertStart(visited, con->dest);
+    Location* result = dfs(con->dest->connections, dest, visited, solution);
+    if(result != NULL) {
+      lkInsertStart(solution, con);
+      return result;
+    }
+
+  }
+  return NULL;
+
+}
+
+void pdfs(Graph* map) {
+    Location* start = askForLocation(map, "Location A: ");
+    if(start == NULL) {
+        return;
+    }
+
+    Location* dest = askForLocation(map, "Location B: ");
+    if(dest == NULL) {
+        return;
+    }
+
+    Lk* solution = lkinit();
+    Lk* visited = lkinit();
+    lkInsertStart(visited, start);
+    Location* result = dfs(start->connections, dest, visited, solution);
+
+    printf("\n\n");
+    if(result == NULL) {
+        printf("Oh man... Coudn't find it");
+    } else {
+        printf("%s", start->name);
+        int sum = 0;
+        for(LkNode* lkn = solution->first; lkn != NULL; lkn = lkn->next) {
+            Connection* scons = (Connection *) lkn->value;
+            printf(" -(%02d)-> %s ", scons->cost, scons->dest->name);
+            sum += scons->cost;
+        }
+        printf("\nTotal Seconds: %d", sum);
+    }
+    printf("\n");
+}
+
 int main() {
     Graph* map = initArkhamMap();
 
     int op = -1;
 
     while(op != 0) {
-        printf("\nOptions: [1] Print Map Connections [2] Pathing (dijktra) [3] Pathing? (BFS) [4] Edit [0] Exit \n:");
+        printf("\nOptions: [1] Print Map Connections [2] Dijktra [3] BFS [4] DFS [5] Edit [0] Exit \n:");
         scanf("%d", &op);
         switch(op) {
             case 1:
@@ -593,6 +645,9 @@ int main() {
                 pbfs(map);
                 break;
             case 4:
+                pdfs(map);
+                break;
+            case 5:
                 editMap(map);
                 break;
         }
